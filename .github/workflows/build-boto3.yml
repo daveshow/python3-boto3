@@ -84,7 +84,6 @@ jobs:
             BOTO3_VERSION=${{ steps.boto3.outputs.version }}
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:boto3-${{ steps.boto3.outputs.version }}
 
       - name: Summary
         run: |
