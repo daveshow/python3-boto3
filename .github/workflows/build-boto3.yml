@@ -69,15 +69,20 @@ jobs:
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Set up QEMU (for cross-platform emulation)
+        if: steps.exists.outputs.exists != 'true'
+        uses: docker/setup-qemu-action@v2
+
       - name: Set up Docker Buildx
         if: steps.exists.outputs.exists != 'true'
         uses: docker/setup-buildx-action@v3
 
-      - name: Build and push
+      - name: Build and push multi-arch image
         if: steps.exists.outputs.exists != 'true'
         uses: docker/build-push-action@v6
         with:
           context: .
+          platforms: linux/amd64,linux/arm64
           push: true
           build-args: |
             ALPINE_TAG=${{ env.ALPINE_TAG }}
