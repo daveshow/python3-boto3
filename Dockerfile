@@ -16,11 +16,6 @@ RUN apk add --no-cache python3 py3-pip ca-certificates \
 
 # Install boto3 (optionally pin to a specific version via build-arg)
 ARG BOTO3_VERSION
-RUN python3 -m pip install --upgrade pip \
-  && if [ -n "$BOTO3_VERSION" ]; then \
-  pip install "boto3==${BOTO3_VERSION}"; \
-  else \
-  pip install "boto3"; \
-  fi
+RUN python3 -m pip install --upgrade pip
 
 CMD ["python3", "-c", "import platform, boto3; print('Python', platform.python_version()); print('boto3', boto3.__version__)"]
