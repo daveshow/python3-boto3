@@ -24,14 +24,63 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Get latest boto3 version from PyPI
+      - name: Get boto3 version from Alpine (fallback to PyPI)
         id: boto3
         run: |
           set -euo pipefail
           python - <<'PY' | tee -a "$GITHUB_OUTPUT"
-          import json, urllib.request
-          data = json.load(urllib.request.urlopen('https://pypi.org/pypi/boto3/json'))
-          print(f"version={data['info']['version']}")
+          import io, tarfile, urllib.request, os, json, sys
+
+          pkg = 'py3-boto3'
+          alpine_tag = os.environ.get('ALPINE_TAG', 'latest')
+
+          # Map ALPINE_TAG to Alpine branches used by the mirrors
+          if alpine_tag in ('latest', 'edge'):
+              branch = 'edge'
+          else:
+              branch = alpine_tag if alpine_tag.startswith('v') else f'v{alpine_tag}'
+
+          repos = ['main', 'community', 'testing']
+          arch = 'x86_64'
+          version = None
+
+          for repo in repos:
+              url = f'https://dl-cdn.alpinelinux.org/alpine/{branch}/{repo}/{arch}/APKINDEX.tar.gz'
+              try:
+                  with urllib.request.urlopen(url, timeout=15) as r:
+                      data = r.read()
+                  tf = tarfile.open(fileobj=io.BytesIO(data), mode='r:gz')
+                  member = tf.extractfile('APKINDEX')
+                  if not member:
+                      continue
+                  text = member.read().decode('utf-8', errors='ignore')
+                  lines = text.splitlines()
+                  for i, line in enumerate(lines):
+                      if line.strip() == f'P:{pkg}':
+                          # scan forward for the version line
+                          for j in range(i+1, min(i+400, len(lines))):
+                              if lines[j].startswith('V:'):
+                                  version = lines[j][2:].strip()
+                                  break
+                      if version:
+                          break
+                  if version:
+                      break
+              except Exception:
+                  # ignore network/parse errors and try next repo
+                  continue
+
+          if version:
+              print(f"version={version}")
+              sys.exit(0)
+
+          # Fallback to PyPI if package/version not found in Alpine
+          try:
+              data = json.load(urllib.request.urlopen('https://pypi.org/pypi/boto3/json', timeout=15))
+              print(f"version={data['info']['version']}")
+          except Exception as e:
+              print('version=unknown')
+              sys.exit(1)
           PY
 
       - name: Ensure required variables are set
@@ -88,6 +137,7 @@ jobs:
             ALPINE_TAG=${{ env.ALPINE_TAG }}
             BOTO3_VERSION=${{ steps.boto3.outputs.version }}
           tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:boto3-${{ steps.boto3.outputs.version }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
 
       - name: Summary

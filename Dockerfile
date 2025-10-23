@@ -10,7 +10,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 RUN apk update && apk upgrade
 
 # Install Python 3 + pip (from Alpine packages), plus CA roots
-RUN apk add --no-cache python3 py3-pip ca-certificates \
+RUN apk add --no-cache python3 py3-pip ca-certificates py3-boto3 \
   && update-ca-certificates \
   && ln -sf python3 /usr/bin/python
 
