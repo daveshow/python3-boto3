@@ -3,9 +3,9 @@ name: Build and push image on boto3 releases (Alpine base)
 on:
   workflow_dispatch:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   schedule:
-    - cron: "0 */6 * * *" # every 6 hours
+    - cron: "0 */22 * * *" # every 6 hours
 
 permissions:
   contents: read
@@ -13,7 +13,7 @@ permissions:
 
 env:
   # Set these as Repository variables (Settings -> Secrets and variables -> Variables)
-  REGISTRY: ${{ vars.REGISTRY }}     # e.g., ghcr.io or docker.io
+  REGISTRY: ${{ vars.REGISTRY }} # e.g., ghcr.io or docker.io
   IMAGE_NAME: ${{ vars.IMAGE_NAME }} # e.g., daveshow/boto3-alpine
   ALPINE_TAG: ${{ vars.ALPINE_TAG }} # e.g., latest (tracks newest Alpine) or 3.20 (pins Python ~3.12)
 
@@ -103,7 +103,7 @@ jobs:
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ secrets.DOCKER_USERNAME }} # Set as a repository secret
-          password: ${{ secrets.DOCKER_TOKEN }}    # Set as a repository secret
+          password: ${{ secrets.DOCKER_TOKEN }} # Set as a repository secret
 
       - name: Check if image for this boto3 version already exists
         id: exists
@@ -126,19 +126,44 @@ jobs:
         if: steps.exists.outputs.exists != 'true'
         uses: docker/setup-buildx-action@v3
 
+      - name: Docker meta
+        id: meta
+        if: steps.exists.outputs.exists != 'true'
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          flavor: |
+            latest=auto
+          tags: |
+            type=raw,value=boto3-${{ steps.boto3.outputs.version }}
+            type=raw,value=latest
+
       - name: Build and push multi-arch image
         if: steps.exists.outputs.exists != 'true'
         uses: docker/build-push-action@v6
         with:
           context: .
           platforms: linux/amd64,linux/arm64
-          push: true
+          push: ${{ github.event_name != 'pull_request' }}
+          cache-from: type=gha # Reuse GitHub Actions cache
+          cache-to: type=gha,mode=max
           build-args: |
             ALPINE_TAG=${{ env.ALPINE_TAG }}
             BOTO3_VERSION=${{ steps.boto3.outputs.version }}
-          tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:boto3-${{ steps.boto3.outputs.version }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # tags: |
+          #   ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:boto3-${{ steps.boto3.outputs.version }}
+          #   ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+
+      - name: update docker registry with readme file
+        if: steps.exists.outputs.exists != 'true' && env.REGISTRY == 'docker.io'
+        uses: peter-evans/dockerhub-description@v4
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_TOKEN }}
+          repository: ${{ env.IMAGE_NAME }}
+          readme-file: ./README.md
 
       - name: Summary
         run: |
