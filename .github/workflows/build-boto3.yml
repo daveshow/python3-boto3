@@ -158,12 +158,12 @@ jobs:
 
       - name: update docker registry with readme file
         if: steps.exists.outputs.exists != 'true' && env.REGISTRY == 'docker.io'
-        uses: peter-evans/dockerhub-description@v4
+        uses: peter-evans/dockerhub-description@v5
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_TOKEN }}
           repository: ${{ env.IMAGE_NAME }}
-          readme-file: ./README.md
+          readme-filepath: ./README.md
 
       - name: Summary
         run: |
